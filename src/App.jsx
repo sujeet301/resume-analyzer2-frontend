@@ -21,8 +21,9 @@ const TABS = [
 ];
 
 export default function App() {
-  const { user, logout } = useAuth();
+  const { user, ready, logout } = useAuth();
   const [tab, setTab] = useState(localStorage.getItem("resumeai_tab") || "dashboard");
+  if (!ready) return <div className="splash"><span className="spin" /> Loading…</div>;
   if (!user) return <Login />;
 
   const go = (id) => { setTab(id); localStorage.setItem("resumeai_tab", id); window.scrollTo(0, 0); };

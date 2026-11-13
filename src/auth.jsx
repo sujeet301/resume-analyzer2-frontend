@@ -1,54 +1,52 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { api, tokenStore, setUnauthorizedHandler } from "./api.js";
 
-const USERS = "resumeai_users";
-const SESSION = "resumeai_session";
 const Ctx = createContext(null);
 export const useAuth = () => useContext(Ctx);
 
-const readUsers = () => { try { return JSON.parse(localStorage.getItem(USERS)) || {}; } catch { return {}; } };
-const writeUsers = (u) => localStorage.setItem(USERS, JSON.stringify(u));
-
-async function sha256(text) {
-  if (globalThis.crypto?.subtle) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-  return btoa(unescape(encodeURIComponent(text))); // fallback on non-secure origins
-}
-const randomSalt = () => Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(16).padStart(2, "0")).join("");
-const publicUser = (u) => ({ name: u.name, email: u.email });
+const toUser = (d) => {
+  const u = d?.user ?? d ?? {};
+  const email = u.email ?? u.username ?? "";
+  return { id: u.id ?? u._id ?? u.user_id ?? email, name: u.name ?? u.full_name ?? u.username ?? email, email };
+};
+const clean = (e) => (e?.detail && e.status ? e.detail : e.message);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const email = localStorage.getItem(SESSION);
-    const u = email && readUsers()[email];
-    return u ? publicUser(u) : null;
-  });
+  const [user, setUser] = useState(null);
+  const [ready, setReady] = useState(!tokenStore.get());
 
-  const signup = async ({ name, email, password }) => {
-    email = email.trim().toLowerCase();
-    name = name.trim();
-    if (!name) throw new Error("Please enter your name.");
-    if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Please enter a valid email address.");
-    if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-    const users = readUsers();
-    if (users[email]) throw new Error("An account with this email already exists. Please sign in.");
-    const salt = randomSalt();
-    users[email] = { name, email, salt, hash: await sha256(salt + password), created: Date.now() };
-    writeUsers(users);
-    localStorage.setItem(SESSION, email);
-    setUser(publicUser(users[email]));
+  const logout = useCallback(() => { tokenStore.clear(); setUser(null); }, []);
+  useEffect(() => { setUnauthorizedHandler(logout); }, [logout]);
+
+  // Restore session from a saved token
+  useEffect(() => {
+    if (!tokenStore.get()) return;
+    api.me().then((d) => setUser(toUser(d))).catch(() => tokenStore.clear()).finally(() => setReady(true));
+  }, []);
+
+  const finish = async (tokenResponse) => {
+    const token = tokenResponse?.access_token ?? tokenResponse?.token;
+    if (!token) throw new Error("The server did not return an access token.");
+    tokenStore.set(token);
+    try { setUser(toUser(await api.me())); }
+    catch (e) { tokenStore.clear(); throw e; }
   };
 
   const login = async ({ email, password }) => {
-    email = email.trim().toLowerCase();
-    const u = readUsers()[email];
-    if (!u || (await sha256(u.salt + password)) !== u.hash) throw new Error("Incorrect email or password.");
-    localStorage.setItem(SESSION, email);
-    setUser(publicUser(u));
+    try { await finish(await api.login({ email: email.trim(), password })); }
+    catch (e) { throw new Error(clean(e)); }
   };
 
-  const logout = () => { localStorage.removeItem(SESSION); setUser(null); };
+  const signup = async ({ name, email, password }) => {
+    if (!name.trim()) throw new Error("Please enter your name.");
+    if (password.length < 6) throw new Error("Password must be at least 6 characters.");
+    try {
+      const d = await api.register({ name: name.trim(), email: email.trim(), password });
+      // Some backends return a token on register; otherwise log in right away
+      if (d?.access_token || d?.token) await finish(d);
+      else await finish(await api.login({ email: email.trim(), password }));
+    } catch (e) { throw new Error(clean(e)); }
+  };
 
-  return <Ctx.Provider value={{ user, signup, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, ready, signup, login, logout }}>{children}</Ctx.Provider>;
 }

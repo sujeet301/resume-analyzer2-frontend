@@ -1,10 +1,10 @@
 import React, { useRef, useState } from "react";
-import { api, asList, resumeIdOf } from "../api.js";
+import { api, resumeIdOf } from "../api.js";
 import { Section, Result, ErrorBox, Loading, useAsync, Icon } from "../components.jsx";
 import { useStore, resumeLabel } from "../store.jsx";
 
 export default function Resumes() {
-  const { resumes, claimable, resumeId, setResumeId, refreshResumes, addOwned, removeOwned } = useStore();
+  const { resumes, resumeId, setResumeId, refreshResumes } = useStore();
   const [file, setFile] = useState(null);
   const [drag, setDrag] = useState(false);
   const input = useRef(null);
@@ -12,21 +12,13 @@ export default function Resumes() {
   const detail = useAsync();
   const del = useAsync();
 
-  const ids = async () => new Set(asList(await api.listResumes(), ["resumes", "items", "data"]).map(resumeIdOf));
-
   const upload = async () => {
     if (!file) return;
-    const d = await up.run(async () => {
-      const before = await ids();
-      const res = await api.uploadResume(file);
-      const found = [resumeIdOf(res), resumeIdOf(res?.resume)].filter(Boolean);
-      (await ids()).forEach((id) => { if (!before.has(id)) found.push(id); });
-      return { res, found: [...new Set(found)] };
-    });
-    if (d) {
-      addOwned(d.found);
-      if (d.found[0]) setResumeId(d.found[0]);
+    const res = await up.run(() => api.uploadResume(file));
+    if (res) {
+      const id = resumeIdOf(res) ?? resumeIdOf(res.resume);
       await refreshResumes();
+      if (id) setResumeId(id);
       setFile(null);
     }
   };
@@ -34,7 +26,7 @@ export default function Resumes() {
   const remove = async (id) => {
     if (!confirm("Delete this resume and all related records?")) return;
     const ok = await del.run(() => api.deleteResume(id));
-    if (ok !== null) { removeOwned(id); if (resumeId === id) setResumeId(""); detail.setData(null); refreshResumes(); }
+    if (ok !== null) { if (resumeId === id) setResumeId(""); detail.setData(null); refreshResumes(); }
   };
 
   const onDrop = (e) => { e.preventDefault(); setDrag(false); setFile(e.dataTransfer.files?.[0] || null); };
@@ -75,22 +67,6 @@ export default function Resumes() {
           })}
         </div>
       </Section>
-
-      {claimable.length > 0 && (
-        <Section title={`Unassigned resumes on the server (${claimable.length})`}>
-          <p className="muted">These aren't linked to any account in this browser (e.g. uploaded before login existed). Add them to your account:</p>
-          <div className="stack">
-            {claimable.map((r) => (
-              <div className="card inner" key={resumeIdOf(r)}>
-                <div className="card-head" style={{ marginBottom: 0 }}>
-                  <div><strong>{resumeLabel(r)}</strong><div className="muted mono">{resumeIdOf(r)}</div></div>
-                  <button className="btn small" onClick={() => addOwned([resumeIdOf(r)])}>Add to my account</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
 
       {(detail.loading || detail.data || detail.error) && (
         <Section title="Resume details" actions={<button className="btn small ghost" onClick={() => detail.setData(null)}>Close</button>}>

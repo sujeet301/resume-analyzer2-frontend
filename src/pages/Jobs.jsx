@@ -34,16 +34,15 @@ function AddJob() {
 
 function LiveSearch() {
   const { resumeId } = useStore();
-  const [p, setP] = useState({ query: "", location: "", country: "in", limit: 20, remote: false, adzuna: true, arbeitnow: false });
+  const [p, setP] = useState({ query: "", location: "", limit: 20, remote: false });
   const live = useAsync();
   const li = useAsync();
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
 
-  const providers = [p.adzuna && "adzuna", p.arbeitnow && "arbeitnow"].filter(Boolean).join(",");
   const search = () =>
     live.run(() => api.searchLive(resumeId, {
-      query: p.query, location: p.location, country: p.country, limit: p.limit,
-      providers, remote: p.remote ? "true" : "",
+      query: p.query, location: p.location, limit: p.limit,
+      providers: "arbeitnow", remote: p.remote ? "true" : "",
     }));
   const linkedin = () =>
     li.run(() => api.linkedinSearch(resumeId, { location: p.location, remote: p.remote ? "true" : "" }));
@@ -55,18 +54,16 @@ function LiveSearch() {
       <div className="grid2">
         <label className="field"><span>Query (optional)</span><input value={p.query} onChange={set("query")} placeholder="python developer" /></label>
         <label className="field"><span>Location</span><input value={p.location} onChange={set("location")} placeholder="Delhi NCR" /></label>
-        <label className="field"><span>Country code (Adzuna)</span><input value={p.country} onChange={set("country")} maxLength={2} /></label>
         <label className="field"><span>Limit</span><input type="number" min={1} max={50} value={p.limit} onChange={set("limit")} /></label>
       </div>
       <div className="row" style={{ margin: "8px 0" }}>
-        <label className="check"><input type="checkbox" checked={p.adzuna} onChange={set("adzuna")} /> Adzuna</label>
-        <label className="check"><input type="checkbox" checked={p.arbeitnow} onChange={set("arbeitnow")} /> Arbeitnow</label>
         <label className="check"><input type="checkbox" checked={p.remote} onChange={set("remote")} /> Remote only</label>
       </div>
       <div className="row">
-        <button className="btn" disabled={!resumeId || !providers || live.loading} onClick={search}>Search live jobs</button>
+        <button className="btn" disabled={!resumeId || live.loading} onClick={search}>Search live jobs</button>
         <button className="btn ghost" disabled={!resumeId || li.loading} onClick={linkedin}>Get LinkedIn search links</button>
       </div>
+      <p className="muted">Live listings come from <a href="https://www.arbeitnow.com/" target="_blank" rel="noreferrer">Arbeitnow</a> (mostly Germany/Europe, so results may be sparse for India). Apply on the original listing.</p>
       <Loading on={live.loading} text="Fetching and ranking listings…" /><ErrorBox error={live.error} />
       {live.data?.provider_errors && Object.keys(live.data.provider_errors).length > 0 && (
         <div className="alert warn"><strong>Provider errors</strong><Result data={live.data.provider_errors} /></div>
@@ -92,6 +89,7 @@ export default function Jobs() {
           <button className="btn small" onClick={refreshJobs}>Refresh</button>
         </>}>
         <ErrorBox error={seed.error} />
+        <p className="muted">Demo jobs are shared; jobs you add are private to your account.</p>
         {!jobs.length && <p className="muted">No jobs stored yet. Add one below or seed demo jobs.</p>}
         <div className="stack">{jobs.map((j, i) => <JobCard key={idOf(j) ?? i} job={j} />)}</div>
       </Section>

@@ -1,6 +1,16 @@
 const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-async function req(path, { method = "GET", body, form, params } = {}) {
+// ---- bearer token handling ----
+const TOKEN_KEY = "resumeai_token";
+export const tokenStore = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+};
+let onUnauthorized = null;
+export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
+
+async function req(path, { method = "GET", body, form, params, urlencoded, auth = true } = {}) {
   let url = `${BASE}${path}`;
   if (params) {
     const q = new URLSearchParams();
@@ -11,8 +21,13 @@ async function req(path, { method = "GET", body, form, params } = {}) {
     if (s) url += `?${s}`;
   }
   const opts = { method, headers: {} };
-  if (form) opts.body = form;
-  else if (body !== undefined) {
+  const token = tokenStore.get();
+  if (token) opts.headers.Authorization = `Bearer ${token}`;
+  if (urlencoded) {
+    opts.headers["Content-Type"] = "application/x-www-form-urlencoded";
+    opts.body = new URLSearchParams(urlencoded).toString();
+  } else if (form) opts.body = form;
+  if (!urlencoded && !form && body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
@@ -29,12 +44,31 @@ async function req(path, { method = "GET", body, form, params } = {}) {
     let msg = data?.detail ?? data?.message ?? text ?? res.statusText;
     if (Array.isArray(msg)) msg = msg.map((m) => `${(m.loc || []).join(".")}: ${m.msg}`).join("; ");
     if (typeof msg === "object") msg = JSON.stringify(msg);
-    throw new Error(`${res.status} — ${msg}`);
+    if (res.status === 401 && auth && token && onUnauthorized) onUnauthorized();
+    const err = new Error(`${res.status} — ${msg}`);
+    err.status = res.status;
+    err.detail = String(msg);
+    throw err;
   }
   return data;
 }
 
 export const api = {
+  // --- auth ---
+  register: ({ name, email, password }) =>
+    // name is sent under both common field names; extra fields are ignored by the backend
+    req("/api/auth/register", { method: "POST", auth: false, body: { name, full_name: name, email, password } }),
+  login: async ({ email, password }) => {
+    try {
+      return await req("/api/auth/login", { method: "POST", auth: false, body: { email, password } });
+    } catch (e) {
+      // Fallback for OAuth2 password-form style login endpoints
+      if (e.status === 422) return req("/api/auth/login", { method: "POST", auth: false, urlencoded: { username: email, password } });
+      throw e;
+    }
+  },
+  me: () => req("/api/auth/me"),
+
   health: () => req("/api/health"),
   aiStatus: () => req("/api/ai/status"),
 

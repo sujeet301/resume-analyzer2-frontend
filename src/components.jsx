@@ -121,7 +121,9 @@ export function JobCard({ job }) {
           <strong>{j.title || "Untitled job"}</strong>
           <div className="muted">{[j.company, j.location].filter(Boolean).join(" · ")}</div>
         </div>
-        {source && <span className="pill">{source === "adzuna" ? "Jobs by Adzuna" : source === "arbeitnow" ? "Arbeitnow" : source}</span>}
+        {source && (String(source).toLowerCase() === "arbeitnow"
+          ? <a className="pill" href="https://www.arbeitnow.com/" target="_blank" rel="noreferrer">via Arbeitnow</a>
+          : <span className="pill">{source}</span>)}
       </div>
       {score !== undefined && <Bar value={score} />}
       <div className="row" style={{ marginTop: 8 }}>

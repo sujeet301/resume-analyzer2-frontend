@@ -55,7 +55,7 @@ export default function Login() {
               {mode === "login" ? "Create an account" : "Sign in"}
             </button>
           </p>
-          <p className="fineprint">Accounts are stored in this browser only. Do not reuse an important password.</p>
+          <p className="fineprint">Your session is secured with a signed token from the ResumeAI server.</p>
         </form>
       </main>
     </div>
