@@ -1,6 +1,6 @@
 import React from "react";
 import { api } from "../api.js";
-import { Section, Result, ErrorBox, Loading, useAsync, ResumePicker, JobPicker } from "../components.jsx";
+import { Section, Result, ErrorBox, Loading, useAsync, ResumePicker, JobPicker, ScoreHero } from "../components.jsx";
 import { useStore } from "../store.jsx";
 
 export default function Review() {
@@ -13,7 +13,7 @@ export default function Review() {
         Review my resume
       </button>
       <Loading on={rv.loading} text="Gemini is reviewing your resume…" /><ErrorBox error={rv.error} />
-      {rv.data && <div style={{ marginTop: 12 }}><Result data={rv.data} /></div>}
+      {rv.data && <div style={{ marginTop: 12 }}><ScoreHero data={rv.data} /><Result data={rv.data} /></div>}
       <p className="muted">AI output can be wrong. Never add unverified claims to your resume.</p>
     </Section>
   );

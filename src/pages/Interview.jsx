@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { api, idOf } from "../api.js";
+import { api, interviewIdOf } from "../api.js";
 import { Section, Result, ErrorBox, Loading, useAsync, ResumePicker, JobPicker } from "../components.jsx";
-import { useStore } from "../store.jsx";
+import { useStore, jobLabel } from "../store.jsx";
 
 const qText = (q) => (typeof q === "string" ? q : q?.question ?? q?.text ?? q?.prompt ?? JSON.stringify(q));
 
@@ -30,21 +30,28 @@ function Question({ interviewId, index, q, existing, onDone }) {
 }
 
 export default function Interview() {
-  const { resumeId, jobId } = useStore();
+  const { resumeId, jobId, jobs, interviews, addInterview } = useStore();
   const [count, setCount] = useState(8);
-  const [loadId, setLoadId] = useState("");
   const start = useAsync();
   const load = useAsync();
 
   const session = load.data ?? start.data;
-  const interviewId = session ? idOf(session) ?? session.interview_id ?? session.interview?.id : null;
+  const interviewId = session ? interviewIdOf(session) : null;
   const questions = session?.questions ?? session?.interview?.questions ?? [];
   const answers = session?.answers ?? session?.responses ?? [];
   const existingFor = (i) =>
     (Array.isArray(answers) ? answers.find((a) => a?.question_index === i) : null) ||
     (typeof questions[i] === "object" ? questions[i] : null);
 
-  const startNew = async () => { load.setData(null); await start.run(() => api.startInterview(resumeId, jobId || null, Number(count))); };
+  const startNew = async () => {
+    load.setData(null);
+    const d = await start.run(() => api.startInterview(resumeId, jobId || null, Number(count)));
+    const id = d && interviewIdOf(d);
+    if (id) {
+      const job = jobs.find((j) => (j.id ?? j._id ?? j.job_id) === jobId);
+      addInterview({ id, created: Date.now(), count: Number(count), job: job ? jobLabel(job) : "General" });
+    }
+  };
   const refresh = () => load.run(() => api.getInterview(interviewId));
 
   return (
@@ -59,10 +66,17 @@ export default function Interview() {
         <Loading on={start.loading} text="Generating personalized questions…" /><ErrorBox error={start.error} />
       </Section>
 
-      <Section title="Resume an existing interview">
-        <div className="row">
-          <input placeholder="interview_id" value={loadId} onChange={(e) => setLoadId(e.target.value)} />
-          <button className="btn small" disabled={!loadId || load.loading} onClick={() => load.run(() => api.getInterview(loadId))}>Load</button>
+      <Section title="Your interviews">
+        {!interviews.length && <p className="muted">Interviews you start will appear here so you can reopen them.</p>}
+        <div className="stack">
+          {interviews.map((i) => (
+            <div className="card inner" key={i.id}>
+              <div className="card-head" style={{ marginBottom: 0 }}>
+                <div><strong>{i.job}</strong><div className="muted">{new Date(i.created).toLocaleString()} · {i.count} questions</div></div>
+                <button className="btn small ghost" disabled={load.loading} onClick={() => { start.setData(null); load.run(() => api.getInterview(i.id)); }}>Open</button>
+              </div>
+            </div>
+          ))}
         </div>
         <ErrorBox error={load.error} />
       </Section>

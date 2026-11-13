@@ -79,3 +79,8 @@ export function asList(data, preferred = []) {
   }
   return [];
 }
+
+// Precise id helpers (a response can contain several ids, e.g. interview + resume)
+export const resumeIdOf = (o) => o?.resume_id ?? o?.id ?? o?._id ?? null;
+export const interviewIdOf = (o) =>
+  o?.interview_id ?? o?.interview?.interview_id ?? o?.interview?.id ?? o?.id ?? o?._id ?? null;

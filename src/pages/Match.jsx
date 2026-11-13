@@ -1,6 +1,6 @@
 import React from "react";
 import { api, asList, idOf } from "../api.js";
-import { Section, Result, ErrorBox, Loading, useAsync, ResumePicker, JobPicker, JobCard } from "../components.jsx";
+import { Section, Result, ErrorBox, Loading, useAsync, ResumePicker, JobPicker, JobCard, ScoreHero } from "../components.jsx";
 import { useStore } from "../store.jsx";
 
 export default function Match() {
@@ -30,7 +30,7 @@ export default function Match() {
           Analyze match
         </button>
         <Loading on={ana.loading} /><ErrorBox error={ana.error} />
-        {ana.data && <div style={{ marginTop: 12 }}><Result data={ana.data} /></div>}
+        {ana.data && <div style={{ marginTop: 12 }}><ScoreHero data={ana.data} /><Result data={ana.data} /></div>}
       </Section>
     </>
   );
